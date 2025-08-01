@@ -1,0 +1,15 @@
+README.md
+pyproject.toml
+src/__init__.py
+src/args.py
+src/custom_loss.py
+src/dataset.py
+src/evaluation.py
+src/model.py
+src/train.py
+src/training_params.py
+src/semclip.egg-info/PKG-INFO
+src/semclip.egg-info/SOURCES.txt
+src/semclip.egg-info/dependency_links.txt
+src/semclip.egg-info/requires.txt
+src/semclip.egg-info/top_level.txt

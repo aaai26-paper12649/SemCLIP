@@ -1,0 +1,245 @@
+# SemCLIP
+
+Fine-tune OpenCLIP with a custom loss that leverages paraphrased and negated captions to create a more robust semantic alignment between text and image.
+
+## Project Structure
+
+### Source Code (`/src`)
+
+- `__init__.py`: Package initialization file
+- `custom_loss.py`: Implements the NegationParaphraseProjectionLoss combining CLIP, paraphrasing, and negation objectives.
+- `dataset.py`: Dataset and collate function for images with original, paraphrased, and negated captions.
+- `model.py`: PyTorch Lightning implementation of the SemCLIP model.
+- `train.py`: Training script using PyTorch Lightning.
+- `config.py`: Configuration classes for model architecture.
+- `args.py`: Command-line argument parsing.
+- `training_params.py`: Training parameters and hyperparameters.
+- `evaluation.py`: Evaluation metrics and utilities.
+
+## Dataset Format
+
+The dataset is loaded from a CSV file with the following columns:
+
+- `image_number`: A numeric identifier for the image (e.g., `2`). Will be zero-padded to 9 digits for filename construction (e.g., `000000002.jpg`).
+- `caption`: The original caption (raw string, **not tokenized**).
+- `negation`: The negated caption (raw string, **not tokenized**).
+- `paraphrased`: The paraphrased caption (raw string, **not tokenized**).
+
+Images should be stored in a separate directory with filenames formatted as 9-digit zero-padded numbers (e.g., `000000002.jpg`).
+
+Example directory structure:
+
+```
+data/
+  dataset.csv
+  images/
+    000000000.jpg
+    000000001.jpg
+    000000002.jpg
+    ...
+```
+
+**Note:** Captions from the CSV are tokenized by the `SemCLIPDataset` and `custom_collate_fn` before being passed to the model.
+
+### Caption Generation (`/syn_caption_generation`)
+
+- `syn_caption_generation.ipynb`: Jupyter notebook for generating paraphrased and negated captions using Large Language Models (LLMs). This notebook provides an utility to automatically create synthetic caption variations from original image captions, which are essential for training the SemCLIP model with paraphrase and negation captions.
+
+## Methodology
+
+SemCLIP extends CLIP by engineering a new loss function to incorporate the concepts of paraphrasing and negation. The objective is to enrich the joint embedding space with these concepts, producing a more robust semantic alignment between text and image.
+
+### Loss Function
+
+The model uses a custom `NegationParaphraseProjectionLoss` that combines:
+1. Standard CLIP contrastive loss (`L_contrastive`)
+2. Paraphrase consistency loss (`L_paraphrase = 1 - cos(p(t), p(t+))`) 
+3. Negation discrimination loss (`L_negation = max(0, cos(p(t), p(t-)))`) 
+
+The total loss is a weighted combination:
+```
+L_total = (α*L_contrastive + β*L_paraphrase + γ*L_negation) / (α + β + γ)
+```
+
+Where α, β, and γ are weights for each loss component.
+
+### Embedding Projections
+
+The model uses a projection mechanism to create a lower-dimensional subspace where semantic relationships are enforced. Key parameters:
+- `num_projection_vectors`: Number of projection directions (1 or 2)
+- `normalize_projections`: Whether to normalize the projections to unit length
+- `use_learnable_projections`: Whether projection vectors can be updated during training
+
+## Logging
+
+Metric logging is handled by PyTorch Lightning's `self.log` method. Experiment tracking can be managed using MLflow, as detailed in the "MLflow Tracking" section below.
+
+## Installation and Usage
+
+### Using uv (recommended)
+
+[uv](https://github.com/astral-sh/uv) is a fast Python package installer and resolver. To set up the project with uv:
+
+```bash
+# Install uv if you don't have it already
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create and activate a virtual environment
+uv venv
+source .venv/bin/activate
+
+# Install the project and its dependencies
+# Install required dependencies
+uv pip install -e ".[dev]"  # Includes development dependencies like pytest and coverage
+```
+
+### Alternative Installation
+
+If you prefer using pip:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+### Training
+
+To train the model with default settings:
+
+```bash
+uv run python src/train.py --batch-size 64 --epochs 10
+```
+
+
+### Dataset Types
+
+SemCLIP supports multiple dataset formats through the `--dataset-type` parameter:
+
+- `ccneg` (default): Uses the CCNeg dataset format where images are referenced by `image_number`
+- `sugarcrepe`: Uses the SugarCrepe++ dataset format where images are referenced by `filename`
+
+Example:
+
+```bash
+uv run python src/train.py --dataset-type sugarcrepe
+```
+
+Change model architecture and pretrained weights (unfreeze vision encoder):
+
+```bash
+uv run python src/train.py --model ViT-B-32 --pretrained laion2b_s34b_b79k --no-freeze-vision
+```
+
+Train with specific loss weights (e.g., only contrastive and paraphrase losses, no negation):
+
+```bash
+uv run python src/train.py --contrastive-weight 1.0 --paraphrase-weight 1.0 --negation-weight 0.0
+```
+
+### Key Training Parameters
+
+- `--freeze-vision/--no-freeze-vision`: Control whether to freeze the vision encoder (default: frozen)
+- `--model`: Model architecture (default: ViT-B-32)
+- `--pretrained`: Pretrained weights (default: laion2b_s34b_b79k)
+- `--batch-size`: Training batch size
+- `--epochs`: Number of training epochs
+- `--learning-rate`: Learning rate (default: 5e-4)
+- `--temperature`: Temperature parameter for contrastive loss (default: 0.07)
+- `--gradient-accumulation-steps`: Number of steps for gradient accumulation (default: 2)
+- `--gradient-clip-val`: Gradient clipping value (default: 1.0)
+
+#### Loss Function Parameters
+
+- `--contrastive-weight`: Weight for contrastive loss (default: 1.0)
+- `--paraphrase-weight`: Weight for paraphrase loss (default: 1.0)
+- `--negation-weight`: Weight for negation loss (default: 1.0)
+- `--num-projection-vectors`: Number of projection vectors (default: 2)
+- `--normalize-projections`: Whether to normalize projections (default: True)
+- `--use-learnable-projections`: Whether projection vectors are learnable (default: False)
+
+The training script includes optimized default parameters and advanced features:
+
+- Learning rate: 5e-5 (default, optimized for CLIP fine-tuning)
+- Temperature: 0.07 (CLIP standard)
+- Gradient accumulation steps: 2
+- Gradient clipping: 1.0
+- Mixed precision training (16-bit)
+- Cosine annealing scheduler
+
+### Automatic Optimization Features
+
+Additional dataset parameters (with defaults):
+
+```bash
+--data-dir ./data  # Path to the data directory
+--csv-filename dataset.csv  # Name of the CSV file
+--image-dir-name images  # Path to images relative to data_dir
+--val-ratio 0.1  # Proportion of data to use for validation
+--test-ratio 0.1  # Proportion of data to use for testing
+--random-seed 42  # Random seed for reproducible dataset splits
+```
+
+## Notes
+
+- Input caption files should contain raw strings. Tokenization and padding are handled by the `SemCLIPDataset` and `custom_collate_fn` as part of the data loading pipeline.
+- Adjust hyperparameters and optimizer as needed.
+
+## Evaluation Metrics
+
+The model evaluation uses several metrics:
+
+- **Top-k accuracy**: Measures how often the correct caption is in the top k predictions for an image.
+- **Original vs Negation accuracy**: Measures the model's ability to distinguish between an original caption and its negation.
+- **Scaled Original vs Negation accuracy**: Adjusts the original vs negation score to account for the 50% random baseline.
+- **Combined score**: The average of Top-1 original accuracy, Top-1 paraphrase accuracy, and the scaled original vs negation score.
+
+
+
+## MLflow Tracking
+
+This project uses MLflow for experiment tracking. To view the experiment results:
+
+```bash
+# Start the MLflow UI server
+uv run mlflow ui
+
+# Or with regular Python
+mlflow ui
+```
+
+Then open your browser to <http://localhost:5000>
+
+You can set a custom tracking URI using the environment variable:
+
+```bash
+export MLFLOW_TRACKING_URI=/path/to/tracking/directory
+```
+
+## Evaluation
+
+### Automatic Evaluation
+
+Zero-shot evaluation on standard image classification datasets is automatically performed at the end of training as part of the PyTorch Lightning test phase. This includes:
+
+1. Evaluation on multiple datasets (CIFAR10, CIFAR100, Caltech101, etc.)
+2. Testing with both standard and negated prompts
+3. Logging of results to MLflow
+
+To run training with evaluation:
+
+```bash
+uv run python src/train.py --batch-size 64 --epochs 10 --dataset-type ccneg
+```
+
+To run only the evaluation phase on a trained model:
+
+```bash
+uv run python src/train.py --test-only --checkpoint path/to/checkpoint.ckpt --dataset-type ccneg
+```
+
+Note: Make sure to use the same `--dataset-type` parameter that was used during training to ensure consistent data handling.
+
+## License
+
+See LICENSE file if present.
