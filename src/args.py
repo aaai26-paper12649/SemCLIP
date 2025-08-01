@@ -81,6 +81,18 @@ def parse_args():
     parser.add_argument(
         "--lr", type=float, default=1e-5, help="Initial learning rate (default: 1e-5)"
     )
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.07,
+        help="Temperature parameter for loss function (default: 0.07)",
+    )
+    parser.add_argument(
+        "--gradient-accumulation-steps",
+        type=int,
+        default=2,
+        help="Number of steps for gradient accumulation (default: 2)",
+    )
 
     parser.add_argument(
         "--warmup-steps",

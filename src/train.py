@@ -280,7 +280,6 @@ def main():
         data_dir=args.data_dir,
         csv_filename=args.csv_filename,
         image_dir_name=args.image_dir_name,
-        image_extension=args.image_extension,
         batch_size=training_params.batch_size,
         max_items=args.max_items,
         val_ratio=args.val_ratio,
