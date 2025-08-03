@@ -4,6 +4,7 @@ data/*
 data_ccneg/*
 data_scpp/*
 !data/ccneg_paraphrased.csv
+!data/sugarcrepe_pp_paraphrased.csv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
