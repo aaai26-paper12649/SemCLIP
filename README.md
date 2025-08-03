@@ -233,3 +233,7 @@ Zero-shot evaluation on standard image classification datasets is automatically 
 1. Evaluation on multiple datasets (CIFAR10, CIFAR100, Caltech101, etc.)
 2. Testing with both original and negated prompts
 3. Logging of results to MLflow
+
+## License
+
+This project is licensed under the terms specified in the [LICENSE](LICENSE) file. Please refer to the LICENSE file for detailed information about the terms and conditions of use.
