@@ -30,24 +30,21 @@ See below for the expected CSV format and directory structure for each dataset t
 
 ## Dataset Format
 
-The dataset is loaded from a CSV file with the following columns:
-
-### Image Placement and Naming
-
 - **For `ccneg` dataset type:**
   - Images must be named as 9-digit zero-padded numbers based on the `image_number` column in the CSV, with the appropriate extension (default `.jpg`).
     - Example: `image_number` 2 → `000000002.jpg`
-  - Place all images in the directory specified by `--image-dir-name` (default: `images`), inside your `--data-dir`.
+  - Place all images in the directory specified by `--image-dir-name` (default: `ccneg_images/cc3m_subset_images_extracted_final`), inside your `--data-dir`.
 
 - **For `sugarcrepe` dataset type:**
   - Images must be named exactly as specified in the `filename` column of the CSV (case-sensitive).
-  - Place all images in the directory specified by `--image-dir-name` (default: `images`), inside your `--data-dir`.
+  - Place all images in the directory specified by `--image-dir-name`, inside your `--data-dir`.
 
 Example directory structure for both:
+
 ```
 data/
   ccneg_paraphrased.csv
-  sugarcrepe.csv
+  sugarcrepe_pp_paraphrased.csv
   images/
     000000000.jpg
     000000001.jpg
@@ -56,12 +53,11 @@ data/
     ...
 ```
 
+The dataset CSV should also have the following columns:
 
-- `image_number`: A numeric identifier for the image (e.g., `2`). Will be zero-padded to 9 digits for filename construction (e.g., `000000002.jpg`).
 - `caption`: The original caption (raw string, **not tokenized**).
 - `negation`: The negated caption (raw string, **not tokenized**).
 - `paraphrased`: The paraphrased caption (raw string, **not tokenized**).
-
 
 **Note:** Captions from the CSV are tokenized by the `SemCLIPDataset` and `custom_collate_fn` before being passed to the model.
 
@@ -69,7 +65,7 @@ data/
 
 - `syn_caption_generation.ipynb`: Jupyter notebook for generating paraphrased and negated captions using Large Language Models (LLMs). This notebook provides an utility to automatically create synthetic caption variations from original image captions, which are essential for training the SemCLIP model with paraphrase and negation captions.
 
-The processed data for CCNeg and Sugarcrepe++ have been provided in the \data folder as ccneg_paraphrased.csv and sugarcrepe_pp_paraphrased.csv.
+The processed data for CCNeg and Sugarcrepe++ have been provided in the data/ folder as ccneg_paraphrased.csv and sugarcrepe_pp_paraphrased.csv.
 
 ## Methodology
 
@@ -78,11 +74,13 @@ SemCLIP extends CLIP by engineering a new loss function to incorporate the conce
 ### Loss Function
 
 The model uses a custom `NegationParaphraseProjectionLoss` that combines:
+
 1. Standard CLIP contrastive loss (`L_contrastive`)
-2. Paraphrase consistency loss (`L_paraphrase = 1 - cos(p(t), p(t+))`) 
-3. Negation discrimination loss (`L_negation = max(0, cos(p(t), p(t-)))`) 
+2. Paraphrase consistency loss (`L_paraphrase = 1 - cos(p(t), p(t+))`)
+3. Negation discrimination loss (`L_negation = max(0, cos(p(t), p(t-)))`)
 
 The total loss is a weighted combination:
+
 ```
 L_total = (α*L_contrastive + β*L_paraphrase + γ*L_negation) / (α + β + γ)
 ```
@@ -92,13 +90,10 @@ Where α, β, and γ are weights for each loss component.
 ### Embedding Projections
 
 The model uses a projection mechanism to create a lower-dimensional subspace where semantic relationships are enforced. Key parameters:
+
 - `num_projection_vectors`: Number of projection directions (1 or 2)
 - `normalize_projections`: Whether to normalize the projections to unit length
 - `use_learnable_projections`: Whether projection vectors can be updated during training
-
-## Logging
-
-Metric logging is handled by PyTorch Lightning's `self.log` method. Experiment tracking can be managed using MLflow, as detailed in the "MLflow Tracking" section below.
 
 ## Installation and Usage
 
@@ -109,24 +104,6 @@ Metric logging is handled by PyTorch Lightning's `self.log` method. Experiment t
 ```bash
 # Install uv if you don't have it already
 curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Create and activate a virtual environment
-uv venv
-source .venv/bin/activate
-
-# Install the project and its dependencies
-# Install required dependencies
-uv pip install -e ".[dev]"  # Includes development dependencies like pytest and coverage
-```
-
-### Alternative Installation
-
-If you prefer using pip:
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e .
 ```
 
 ### Training
@@ -134,9 +111,8 @@ pip install -e .
 To train the model with default settings:
 
 ```bash
-uv run python src/train.py --batch-size 64 --epochs 10
+uv run python src/train.py
 ```
-
 
 ### Dataset Types
 
@@ -168,8 +144,8 @@ uv run python src/train.py --paraphrase-weight 1.0 --negation-weight 0.0
 - `--freeze-vision/--no-freeze-vision`: Control whether to freeze the vision encoder (default: frozen)
 - `--model`: Model architecture (default: ViT-B-32)
 - `--pretrained`: Pretrained weights (default: laion2b_s34b_b79k)
-- `--batch-size`: Training batch size
-- `--epochs`: Number of training epochs
+- `--batch-size`: Training batch size (default: 256)
+- `--epochs`: Number of training epochs (default: 200)
 - `--lr`: Learning rate (default: 5e-5)
 
 #### Loss Function Parameters
@@ -180,37 +156,12 @@ uv run python src/train.py --paraphrase-weight 1.0 --negation-weight 0.0
 - `--normalize-projections`: Whether to normalize projections (default: True)
 - `--use-learnable-projections`: Whether projection vectors are learnable (default: False)
 
-The training script includes optimized default parameters and advanced features:
+The training script includes the following optimized default parameters:
 
 - Mixed precision training (16-bit)
 - Cosine annealing scheduler
 
 **Note:** Only parameters listed in the CLI are user-configurable. Other advanced parameters use defaults as defined in the codebase (`training_params.py`).
-
-### Automatic Optimization Features
-
-Additional dataset parameters (with defaults):
-
-```bash
---data-dir ./data  # Path to the data directory
---csv-filename dataset.csv  # Name of the CSV file
---image-dir-name images  # Path to images relative to data_dir
---dataset-type ccneg  # Type of dataset to use (default: ccneg)
---random-seed 42  # Random seed for reproducible dataset splits
-```
-
-## Notes
-
-- Input caption files should contain raw strings. Tokenization and padding are handled by the `SemCLIPDataset` and `custom_collate_fn` as part of the data loading pipeline.
-
-## Evaluation Metrics
-
-The model evaluation uses several metrics:
-
-- **Top-k accuracy**: Measures how often the correct caption is in the top k predictions for an image.
-- **Original vs Negation accuracy**: Measures the model's ability to distinguish between an original caption and its negation.
-- **Scaled Original vs Negation accuracy**: Adjusts the original vs negation score to account for the 50% random baseline.
-- **Combined score**: The average of Top-1 original accuracy, Top-1 paraphrase accuracy, and the scaled original vs negation score.
 
 ## MLflow Tracking
 
@@ -219,21 +170,25 @@ This project uses MLflow for experiment tracking. To view the experiment results
 ```bash
 # Start the MLflow UI server
 uv run mlflow ui
-
 ```
 
 Then open your browser to <http://localhost:5000>
 
 ## Evaluation
 
-### Automatic Evaluation
-
 Zero-shot evaluation on standard image classification datasets is automatically performed at the end of training as part of the PyTorch Lightning test phase. This includes:
 
-1. Evaluation on multiple datasets (CIFAR10, CIFAR100, Caltech101, etc.)
-2. Testing with both original and negated prompts
+1. Testing retrieval accuracy with original, paraphrased and negated prompts
+2. Zero-shot classification accuracy on multiple datasets (CIFAR10, CIFAR100, etc.)
 3. Logging of results to MLflow
+
+The model evaluation uses several metrics:
+
+- **Top-k accuracy**: Measures how often the correct caption is in the top k predictions for an image.
+- **Original vs Negation accuracy**: Measures the model's ability to distinguish between an original caption and its negation.
+- **Scaled Original vs Negation accuracy**: Adjusts the original vs negation score to account for the 50% random baseline.
+- **Combined score**: The average of Top-1 original accuracy, Top-1 paraphrase accuracy, and the scaled original vs negation score.
 
 ## License
 
-This project is licensed under the terms specified in the [LICENSE](LICENSE) file. Please refer to the LICENSE file for detailed information about the terms and conditions of use.
+This project is licensed under the terms specified in the [LICENSE file](LICENSE) file. Please refer to the LICENSE file for detailed information about the terms and conditions of use.
