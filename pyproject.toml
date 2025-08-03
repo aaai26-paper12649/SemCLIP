@@ -1,0 +1,20 @@
+[project]
+name = "semclip"
+version = "0.1.0"
+description = "Fine-tuning CLIP with paraphrasing and negation constraints"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "lightning>=2.5.1.post0",
+    "mlflow>=2.22.0",
+    "open-clip-torch>=2.32.0",
+    "pandas>=2.2.3",
+    "pytest>=8.3.5",
+    "torch>=2.7.0",
+    "torchvision>=0.22.0",
+]
+
+[tool.pytest.ini_options]
+pythonpath = [
+    "."
+]
